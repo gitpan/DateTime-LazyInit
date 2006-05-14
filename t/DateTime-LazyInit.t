@@ -5,7 +5,10 @@
 
 # change 'tests => 1' to 'tests => last_test_to_print';
 
-use Test::More qw/no_plan/;# tests => 'no_plan';
+use Test::More tests => 107; #qw/no_plan/;#
+
+use DateTime;
+use DateTime::Duration;
 
 my $have_exception;
 
@@ -20,7 +23,7 @@ BEGIN {
 # Insert your test code below, the Test::More module is use()ed here so read
 # its man page ( perldoc Test::More ) for help writing this test script.
 
-my $dtli = DateTime::LazyInit->new( year=>2005, month=>7, day=>25 );
+my $dtli = DateTime::LazyInit->new( year=>2006, month=>7, day=>25 );
 
 isa_ok($dtli => 'DateTime::LazyInit');
 
@@ -124,27 +127,206 @@ isa_ok($dtd     => 'DateTime::Duration');
 
 SKIP: {
 	skip "Can't load Test::Exception", 1 unless $have_exception;
+
+	# $dtli[2] has an out-of-bounds day value so when
+	# it inflates it should die
+
 	dies_ok { $dtli[2]->add( months=>1 ) };
 }
 
 
+#----------------------------------------------------------------------
+# Test other constructors
+#----------------------------------------------------------------------
+
+#
+# from_epoch
+#
+my $time = time;
+my $dtli_fe = DateTime::LazyInit->from_epoch(epoch => $time);
+isa_ok($dtli_fe => 'DateTime::LazyInit');
+
+is($dtli_fe->epoch, $time, "epoch accessor from from_epoch()");
+
+# previous call to epoch() should have inflated
+isa_ok($dtli_fe, 'DateTime');
+
+
+#
+# now
+#
+my $dtli_n = DateTime::LazyInit->now;
+isa_ok($dtli_n => 'DateTime::LazyInit');
+
+my $now_time = $dtli_n->epoch;
+ok( ($now_time - $time) < 5, "epoch accessor from now()");
+
+# previous call to epoch() should have inflated
+isa_ok($dtli_n, 'DateTime');
+
+#
+# today
+#
+my $today = DateTime->today;
+my $dtli_t = DateTime::LazyInit->today;
+isa_ok($dtli_t => 'DateTime::LazyInit');
+
+is( $dtli_t->datetime, $today->datetime, "datetime accessor from today()");
+
+# previous call to datetime() should have inflated
+isa_ok($dtli_t, 'DateTime');
+
+#
+# from_object
+#
+my $dtli_fo = DateTime::LazyInit->from_object( object => $today );
+isa_ok($dtli_fo, 'DateTime::LazyInit');
+
+is( $dtli_fo->datetime, $today->datetime,
+    "datetime accessor from from_object()");
+
+# previous call to datetime() should have inflated
+isa_ok($dtli_fo, 'DateTime');
+
+#
+# last_day_of_month
+#
+my $dtli_ldom = DateTime::LazyInit->last_day_of_month(
+    year => 2006, month => 1);
+
+isa_ok($dtli_ldom, 'DateTime::LazyInit');
+
+my $last_jan_day = DateTime->new(year => 2006, month => 1, day => 31);
+$last_jan_day = $last_jan_day->truncate( to => 'day');
+
+is( $dtli_ldom->datetime, $last_jan_day->datetime,
+    "datetime accessor from last_day_of_month()" );
+
+# previous call to datetime() should have inflated
+isa_ok($dtli_ldom, 'DateTime');
+
+#
+# from_day_of_year
+#
+my $dtli_fdoy = DateTime::LazyInit->from_day_of_year(
+    year => 2006, day_of_year => 1);
+isa_ok($dtli_fdoy, 'DateTime::LazyInit');
+
+my $first_jan_day = DateTime->new(year => 2006, month => 1, day => 1);
+$first_jan_day = $first_jan_day->truncate( to => 'day' );
+
+is($dtli_fdoy->datetime, $first_jan_day->datetime,
+    "datetime accessor from first_day_of_year()" );
+
+# previous call to datetime() should have inflated
+isa_ok($dtli_fdoy, 'DateTime');
 
 
 
+#----------------------------------------------------------------------
+# Overloads
+#----------------------------------------------------------------------
+
+# <=> overload
+
+my $dtli_over1 = DateTime::LazyInit->from_day_of_year(
+    year => 2005, day_of_year => 1);
+isa_ok($dtli_over1, 'DateTime::LazyInit');
+
+my $dtli_over2 = DateTime::LazyInit->from_day_of_year(
+    year => 2005, day_of_year => 5);
+isa_ok($dtli_over2, 'DateTime::LazyInit');
+
+ok($dtli_over1 < $dtli_over2,
+    "Overload '<=>'" );
+
+# previous call to datetime() should have inflated
+isa_ok($dtli_over1, 'DateTime');
+isa_ok($dtli_over2, 'DateTime');
+
+
+# cmp overload
+
+$dtli_over1 = DateTime::LazyInit->from_day_of_year(
+    year => 2005, day_of_year => 1);
+isa_ok($dtli_over1, 'DateTime::LazyInit');
+
+$dtli_over2 = DateTime::LazyInit->from_day_of_year(
+    year => 2005, day_of_year => 5);
+isa_ok($dtli_over2, 'DateTime::LazyInit');
+
+ok($dtli_over1 lt $dtli_over2,
+    "Overload 'cmp'" );
+
+# previous call to datetime() should have inflated
+isa_ok($dtli_over1, 'DateTime');
+isa_ok($dtli_over2, 'DateTime');
+
+
+# string overload
+
+$dtli_over1 = DateTime::LazyInit->from_day_of_year(
+    year => 2005, day_of_year => 1);
+isa_ok($dtli_over1, 'DateTime::LazyInit');
+
+is("$dtli_over1", "2005-01-01T00:00:00",
+    "Overload stringification" );
+
+# previous call to datetime() should have inflated
+isa_ok($dtli_over1, 'DateTime');
+
+
+# subtract overload
+
+$dtli_over1 = DateTime::LazyInit->from_day_of_year(
+    year => 2005, day_of_year => 1);
+isa_ok($dtli_over1, 'DateTime::LazyInit');
+
+$dtli_over2 = DateTime::LazyInit->from_day_of_year(
+    year => 2005, day_of_year => 5);
+isa_ok($dtli_over2, 'DateTime::LazyInit');
+
+isa_ok($dtli_over2 - $dtli_over1, 'DateTime::Duration',
+    "Overload subtraction" );
+
+# subtraction of DateTime::LazyInit should have inflated
+isa_ok($dtli_over1, 'DateTime');
+isa_ok($dtli_over2, 'DateTime');
 
 
 
+$dtli_over2 = DateTime::LazyInit->from_day_of_year(
+    year => 2005, day_of_year => 5);
+isa_ok($dtli_over2, 'DateTime::LazyInit');
+
+isa_ok($dtli_over2 - $dtli_over1, 'DateTime::Duration',
+    "Overload subtraction" );
+
+# subtraction of DateTime should have inflated
+isa_ok($dtli_over2, 'DateTime');
 
 
 
+$dtli_over2 = DateTime::LazyInit->from_day_of_year(
+    year => 2005, day_of_year => 5);
+isa_ok($dtli_over2, 'DateTime::LazyInit');
+
+isa_ok($dtli_over2 - DateTime::Duration->new(days => 5), 'DateTime',
+    "Overload subtraction" );
+
+# subtraction of DateTime::Duration should have inflated
+isa_ok($dtli_over2, 'DateTime');
 
 
 
+# add overload
 
+$dtli_over1 = DateTime::LazyInit->from_day_of_year(
+    year => 2005, day_of_year => 1);
+isa_ok($dtli_over1, 'DateTime::LazyInit');
 
+isa_ok($dtli_over1 + DateTime::Duration->new(days => 5), 'DateTime',
+    "Overload addition" );
 
-
-
-
-
-
+# addition should have inflated
+isa_ok($dtli_over1, 'DateTime');

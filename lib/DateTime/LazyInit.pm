@@ -4,9 +4,46 @@ use strict;
 use warnings;
 
 use DateTime;
-use vars qw/$AUTOLOAD $VERSION/;
+use vars qw/$AUTOLOAD $VERSION $VERBOSE/;
 
-$VERSION = '0.10';
+
+# DEVELOPER NOTE:
+# We have to force these methods to inflate as the overloads were only forcing
+# $_[0] to inflate properly.
+
+use overload (
+	'fallback' => 1,
+	'<=>'      => sub {
+						$_[0]->inflate() if ref($_[0]) =~ /^DateTime::LazyInit/;
+						$_[1]->inflate() if ref($_[1]) =~ /^DateTime::LazyInit/;
+						shift->_compare_overload(@_);
+					},
+	'cmp'      => sub {
+						$_[0]->inflate() if ref($_[0]) =~ /^DateTime::LazyInit/;
+						$_[1]->inflate() if ref($_[1]) =~ /^DateTime::LazyInit/;
+						shift->_compare_overload(@_);
+					},
+	'""'       => sub {
+						$_[0]->inflate() if ref($_[0]) =~ /^DateTime::LazyInit/;
+						$_[1]->inflate() if ref($_[1]) =~ /^DateTime::LazyInit/;
+						shift->_stringify(@_);
+					},
+	'-'        => sub {
+						$_[0]->inflate() if ref($_[0]) =~ /^DateTime::LazyInit/;
+						$_[1]->inflate() if ref($_[1]) =~ /^DateTime::LazyInit/;
+						shift->_subtract_overload(@_)
+					},
+	'+'        => sub {
+						$_[0]->inflate() if ref($_[0]) =~ /^DateTime::LazyInit/;
+						$_[1]->inflate() if ref($_[1]) =~ /^DateTime::LazyInit/;
+						shift->_add_overload(@_)
+					},
+);
+
+
+$VERSION = '1.0200';
+
+$VERBOSE = 0; # Set to non-0 to 'warn' every time an object inflates
 
 sub new {
 	my $class = shift;
@@ -15,8 +52,111 @@ sub new {
 	# We'll accept your grandmother if you pass her to us.
 	my %args = @_;
 
-	return bless \%args, $class;
+	return bless \%args, 'DateTime::LazyInit::Constructor_new';
 }
+
+{
+	package DateTime::LazyInit::Constructor_new;
+	use vars qw/@ISA/;
+	@ISA = qw/DateTime::LazyInit/;
+}
+
+sub from_epoch {
+	my $class = shift;
+
+	# NO VALIDATION
+	# We'll accept your grandmother if you pass her to us.
+	my %args = @_;
+
+	return bless \%args, 'DateTime::LazyInit::Constructor_from_epoch';
+}
+
+{
+	package DateTime::LazyInit::Constructor_from_epoch;
+	use vars qw/@ISA/;
+	@ISA = qw/DateTime::LazyInit/;
+}
+
+sub now {
+	my $class = shift;
+
+	# NO VALIDATION
+	# We'll accept your grandmother if you pass her to us.
+	my %args = @_;
+
+	return bless \%args, 'DateTime::LazyInit::Constructor_now';
+}
+
+{
+	package DateTime::LazyInit::Constructor_now;
+	use vars qw/@ISA/;
+	@ISA = qw/DateTime::LazyInit/;
+}
+
+sub today {
+	my $class = shift;
+
+	# NO VALIDATION
+	# We'll accept your grandmother if you pass her to us.
+	my %args = @_;
+
+	return bless \%args, 'DateTime::LazyInit::Constructor_today';
+}
+
+{
+	package DateTime::LazyInit::Constructor_today;
+	use vars qw/@ISA/;
+	@ISA = qw/DateTime::LazyInit/;
+}
+
+sub from_object {
+	my $class = shift;
+
+	# NO VALIDATION
+	# We'll accept your grandmother if you pass her to us.
+	my %args = @_;
+
+	return bless \%args, 'DateTime::LazyInit::Constructor_from_object';
+}
+
+{
+	package DateTime::LazyInit::Constructor_from_object;
+	use vars qw/@ISA/;
+	@ISA = qw/DateTime::LazyInit/;
+}
+
+sub last_day_of_month {
+	my $class = shift;
+
+	# NO VALIDATION
+	# We'll accept your grandmother if you pass her to us.
+	my %args = @_;
+
+	return bless \%args, 'DateTime::LazyInit::Constructor_last_day_of_month';
+}
+
+{
+	package DateTime::LazyInit::Constructor_last_day_of_month;
+	use vars qw/@ISA/;
+	@ISA = qw/DateTime::LazyInit/;
+}
+
+sub from_day_of_year {
+	my $class = shift;
+
+	# NO VALIDATION
+	# We'll accept your grandmother if you pass her to us.
+	my %args = @_;
+
+	return bless \%args, 'DateTime::LazyInit::Constructor_from_day_of_year';
+}
+
+{
+	package DateTime::LazyInit::Constructor_from_day_of_year;
+	use vars qw/@ISA/;
+	@ISA = qw/DateTime::LazyInit/;
+}
+
 
 sub AUTOLOAD {
 
@@ -25,7 +165,7 @@ sub AUTOLOAD {
     return unless $attr =~ /[^A-Z]/;  # skip DESTROY and all-cap methods
 
 	# Anything else, we need to inflate into a DateTime object.
-	return shift->__inflate($attr, @_);
+	return shift->inflate($attr, @_);
 }
 
 # Simple set and get for year
@@ -166,17 +306,19 @@ sub clone {
 # the author <rickm@cpan.org> or the mailing list <datetime@perl.org>
 
 sub utc_rd_values {
-	shift->__inflate('utc_rd_values',@_);
+	shift->inflate('utc_rd_values',@_);
 }
 
 
 # This is the inflator
-sub __inflate {
-	$_[0] = bless \%{new DateTime(%{$_[0]})}, 'DateTime';
+sub inflate {
+	(my $constructor) = ref($_[0]) =~ /Constructor_(.+)$/;
+	$_[0] = bless \%{DateTime->$constructor(%{$_[0]})}, 'DateTime';
+	warn("Inflating $_[0].\n") if $VERBOSE;
 	# And call the method on that
 	my $self = shift;
 	my ($method) = shift;
-	return $self->$method( @_ );
+	return ($method) ? $self->$method( @_ ) : $self;
 }
 
 
@@ -219,10 +361,32 @@ and then die once it needs to inflate into a DateTime object.
 
 =head1 SIMPLE METHODS
 
-As mentioned, this module supports simple set and get methods without inflating
-into a full DateTime object.
+As mentioned, this module supports simple constructor, set and get methods
+without inflating into a full DateTime object.
+
+=head2 Construcor Methods
+
+These methods replace their counterparts in DateTime. You need to pass options
+to them that match the parameters passed in DateTime. It should be obvious, but
+note that you cannot interchange them.
 
 =over 4
+
+=item * new
+
+=item * now
+
+=item * today
+
+=item * last_day_of_month
+
+=item * from_epoch
+
+=item * from_object
+
+=item * from_day_of_year
+
+=back
 
 =head2 Set Methods
 
@@ -277,6 +441,19 @@ either of these, the object will inflate.
 =item * second
 
 =item * nanosecond
+
+=back
+
+=head2 C<DateTime::LazyInit> Methods
+
+=over 4
+
+=item * inflate( $method, @args )
+
+This method forces the object to inflate. Note that this method cannot be
+called on the object once it has inflated as DateTime objects do not have
+an inflate method. If in doubt check the C<ref()> of your object before
+calling C<inflate()>.
 
 =back
 
